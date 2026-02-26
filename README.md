@@ -1,6 +1,7 @@
 # QPay Payment Provider for Odoo
 
 [![CI](https://github.com/qpay-sdk/qpay-odoo/actions/workflows/ci.yml/badge.svg)](https://github.com/qpay-sdk/qpay-odoo/actions)
+[![License: LGPL v3](https://img.shields.io/badge/License-LGPL%20v3-blue.svg)](LICENSE)
 
 QPay V2 payment integration for Odoo 17+.
 
