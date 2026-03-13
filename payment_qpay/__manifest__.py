@@ -1,6 +1,6 @@
 {
     'name': 'QPay Payment Provider',
-    'version': '1.0.0',
+    'version': '1.0.1',
     'category': 'Accounting/Payment Providers',
     'summary': 'QPay V2 payment integration for Odoo',
     'description': 'Accept payments via QPay V2 API. Supports QR code payments and bank app deep links.',
