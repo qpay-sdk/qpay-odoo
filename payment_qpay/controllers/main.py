@@ -1,6 +1,8 @@
 import json
 import logging
 
+from werkzeug.wrappers import Response
+
 from odoo import http
 from odoo.http import request
 
@@ -11,17 +13,53 @@ class QPayController(http.Controller):
 
     @http.route(
         '/payment/qpay/webhook',
-        type='json', auth='public', methods=['POST'], csrf=False,
+        type='http', auth='public', methods=['GET'], csrf=False,
     )
-    def qpay_webhook(self):
-        data = json.loads(request.httprequest.data)
-        _logger.info('QPay webhook received: %s', data)
+    def qpay_webhook(self, **kw):
+        qpay_payment_id = kw.get('qpay_payment_id')
+        _logger.info('QPay webhook received: qpay_payment_id=%s', qpay_payment_id)
 
-        tx = request.env['payment.transaction'].sudo()._get_tx_from_notification_data(
-            'qpay', data
+        if not qpay_payment_id:
+            _logger.warning('QPay webhook: missing qpay_payment_id')
+            return Response('SUCCESS', status=200, content_type='text/plain')
+
+        # Find all QPay transactions that are pending/draft
+        txs = request.env['payment.transaction'].sudo().search([
+            ('provider_code', '=', 'qpay'),
+            ('state', 'in', ['draft', 'pending']),
+            ('provider_reference', '!=', False),
+        ])
+
+        # Check each transaction's invoice via QPay API to find the matching one
+        for tx in txs:
+            provider = tx.provider_id
+            try:
+                result = provider._qpay_make_request('/v2/payment/check', {
+                    'object_type': 'INVOICE',
+                    'object_id': tx.provider_reference,
+                    'offset': {'page_number': 1, 'page_limit': 100},
+                })
+                rows = result.get('rows', [])
+                # Check if the payment_id matches any row
+                for row in rows:
+                    if str(row.get('payment_id')) == str(qpay_payment_id):
+                        _logger.info(
+                            'QPay webhook: payment %s matched tx %s',
+                            qpay_payment_id, tx.reference,
+                        )
+                        tx._set_done()
+                        return Response('SUCCESS', status=200, content_type='text/plain')
+            except Exception as e:
+                _logger.error(
+                    'QPay webhook: check failed for tx %s: %s',
+                    tx.reference, e,
+                )
+
+        _logger.warning(
+            'QPay webhook: no matching transaction for payment_id %s',
+            qpay_payment_id,
         )
-        tx._handle_notification_data('qpay', data)
-        return {'status': 'ok'}
+        return Response('SUCCESS', status=200, content_type='text/plain')
 
     @http.route(
         '/payment/qpay/check',
